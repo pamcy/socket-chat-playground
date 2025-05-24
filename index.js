@@ -24,7 +24,8 @@ io.on("connection", (socket) => {
   console.log("a user connected");
 
   socket.on("chat message", (msg) => {
-    console.log("user sent message: ", msg);
+    // send the message to everyone, including the sender for demo purposes
+    io.emit("chat message", msg);
   });
 
   socket.on("disconnect", () => {
