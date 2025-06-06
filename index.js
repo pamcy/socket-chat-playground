@@ -6,7 +6,9 @@ import { Server } from "socket.io";
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  connectionStateRecovery: {},
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,10 +23,11 @@ app.get("/", (req, res) => {
 });
 
 io.on("connection", (socket) => {
-  console.log("a user connected");
+  console.log("a user connected, recovered: ", socket.recovered);
 
   socket.on("chat message", (msg) => {
     // send the message to everyone, including the sender for demo purposes
+    console.log("broadcast message: ", msg);
     io.emit("chat message", msg);
   });
 
