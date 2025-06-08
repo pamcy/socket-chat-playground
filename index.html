@@ -68,6 +68,7 @@
     <ul id="messages"></ul>
     <form id="form" action="">
         <input id="input" autocomplete="off" /><button>Send</button>
+        <button id="disconnect">Disconnect</button>
     </form>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -78,21 +79,55 @@
         const input = document.getElementById('input')
         const messages = document.getElementById('messages')
 
+
+        // 展示連線中斷
+        const disconnectButton = document.getElementById('disconnect')
+
+        disconnectButton.addEventListener('click', (e) => {
+            e.preventDefault()
+
+            if (socket.connected) {
+                disconnectButton.textContent = 'Connect'
+                socket.disconnect()
+            } else {
+                disconnectButton.textContent = 'Disconnect'
+                socket.connect()
+            }
+        })
+
         form.addEventListener('submit', (e) => {
 
             console.log('form submitted')
             e.preventDefault()
 
             if (input.value) {
-                socket.emit('chat message', input.value)
+                socket.emit('chat:message', input.value)
                 input.value = ''
             }
         })
 
-        socket.on('chat message', (msg) => {
+        socket.on('system:announcement', (msg) => {
             const item = document.createElement('li')
 
             item.textContent = msg
+            item.style.color = 'green'
+            messages.appendChild(item)
+            window.scrollTo(0, document.body.scrollHeight)
+        })
+
+        socket.on('chat:message', (msg) => {
+            const item = document.createElement('li')
+
+            item.textContent = msg
+            messages.appendChild(item)
+            window.scrollTo(0, document.body.scrollHeight)
+        })
+
+        socket.on('disconnect', (reason) => {
+            const item = document.createElement('li')
+
+            item.textContent = `*Disconnected (reason: ${reason})`
+            item.style.color = 'red'
             messages.appendChild(item)
             window.scrollTo(0, document.body.scrollHeight)
         })
