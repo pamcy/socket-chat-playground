@@ -73,7 +73,15 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+
+        const socket = io({
+            // auth:  Socket.IO 提供的身份驗證物件，用於傳遞自定義的參數，可以在 auth 裡放任何自定義的資料，這些資料會在連線時傳送給伺服器
+            // auth docs: https://socket.io/docs/v4/client-options/#auth
+
+            auth: {
+                serverOffset: 0 // 自定義的參數，不是 Socket.IO 的內建功能
+            }
+        });
 
         const form = document.getElementById('form')
         const input = document.getElementById('input')
@@ -96,8 +104,8 @@
         })
 
         form.addEventListener('submit', (e) => {
-
             console.log('form submitted')
+
             e.preventDefault()
 
             if (input.value) {
@@ -115,12 +123,15 @@
             window.scrollTo(0, document.body.scrollHeight)
         })
 
-        socket.on('chat:message', (msg) => {
+        socket.on('chat:message', (msg, serverOffset) => {
             const item = document.createElement('li')
 
             item.textContent = msg
             messages.appendChild(item)
             window.scrollTo(0, document.body.scrollHeight)
+
+            // 更新客戶端記錄的最後訊息 ID，這樣下次連線時，可以從這個 ID 開始接收訊息
+            socket.auth.serverOffset = serverOffset
         })
 
         socket.on('disconnect', (reason) => {
