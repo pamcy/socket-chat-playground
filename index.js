@@ -37,7 +37,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // console.log("__dirname: ", __dirname);
 // /Users/pamcy/Coding/Small-Step/socket-chat-playground
 
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.sendFile(join(__dirname, "index.html"));
 });
 
@@ -49,16 +49,47 @@ io.on("connection", async (socket) => {
     `*Connected (recovered: ${socket.recovered})`
   );
 
-  socket.on("chat:message", async (msg) => {
+  socket.on("chat:message", async (msg, clientOffset, callback) => {
     let result;
 
     try {
       // store the message in the database
       // content: 指定要插入資料的欄位名稱
       // ?: 是一個參數化查詢的佔位符 (parameter placeholder)，實際的值會由後面的 msg 參數提供
-      result = await db.run("INSERT INTO messages (content) VALUES (?)", msg);
+      result = await db.run(
+        "INSERT INTO messages (content, client_offset) VALUES (?, ?)",
+        msg,
+        clientOffset
+      );
     } catch (error) {
-      // TODO: handle error
+      // 資料庫中的 client_offset 欄位被設定為 UNIQUE，這意味著每個 client_offset 值只能出現一次。
+      // 網路不穩定時：訊息可能因為網路問題被重複發送
+
+      console.log("error: ", error);
+      // error:  [Error: SQLITE_CONSTRAINT: UNIQUE constraint failed: messages.client_offset] {
+      //   errno: 19,
+      //   code: 'SQLITE_CONSTRAINT' (錯誤類型：約束違反)
+      // }
+
+      //錯誤解析
+      // SQLITE_CONSTRAINT：SQLite 資料庫約束違反錯誤
+      // UNIQUE constraint failed：唯一性約束失敗
+      // messages.client_offset：在 messages 表格的 client_offset 欄位上發生錯誤
+
+      // 防重複訊息機制
+      if (error.errno === 19) {
+        // 告訴客戶端訊息已被處理，即使是重複訊息也要確認通知
+        // 如果沒有 callback
+        // 結果：
+        // 1. 客戶端會重試 3 次
+        // 2. 10 秒後觸發 ackTimeout
+        // 3. 使用者不知道訊息狀態
+        // 4. 可能產生多個錯誤日誌
+        callback();
+      } else {
+        // nothing to do, just let the client retry
+      }
+
       return;
     }
 
@@ -70,6 +101,25 @@ io.on("connection", async (socket) => {
     // Send the message to everyone, including the sender for demo purposes
     // Include the offset with the message
     io.emit("chat:message", msg, result.lastID);
+
+    // Do not forget to acknowledge the event, or else the client will keep retrying (up to retries times).
+    // 告訴客戶端，訊息已經被成功送達
+    // 基本確認
+    callback();
+
+    // 也可以傳遞成功狀態
+    // callback({ success: true, messageId: result.lastID });
+
+    // 也可以傳遞錯誤資訊
+    // callback({ success: false, error: "Duplicate message" });
+
+    // 這一行簡單的 callback() 背後...
+    // 實際上 Socket.IO 做了：
+    // 1. 生成一個回應封包
+    // 2. 將回應標記為對應的原始訊息 ID
+    // 3. 透過 WebSocket/HTTP 長輪詢發送回應
+    // 4. 客戶端收到後停止重試機制
+    // 5. 觸發客戶端的 acknowledgment 處理
   });
 
   // NOTE

@@ -73,14 +73,28 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        let counter = 0
 
+        /**
+         * auth:  Socket.IO 提供的身份驗證物件，用於傳遞自定義的參數，可以在 auth 裡放任何自定義的資料，這些資料會在連線時傳送給伺服器
+         * auth docs: https://socket.io/docs/v4/client-options/#auth
+         *
+         * ackTimeout:
+         *  The default timeout in milliseconds used when waiting for an acknowledgement
+         *  當你發送一個需要確認回應的訊息時，設定等待伺服器回應的最大時間（10秒）
+         *
+         * retries:
+         *  The maximum number of retries. Above the limit, the packet will be discarded.
+         *  The order of the messages is guaranteed.
+         *  當網路連線出現問題，訊息無法送達時，自動重新嘗試發送訊息的次數（最多3次）
+         *
+         */
         const socket = io({
-            // auth:  Socket.IO 提供的身份驗證物件，用於傳遞自定義的參數，可以在 auth 裡放任何自定義的資料，這些資料會在連線時傳送給伺服器
-            // auth docs: https://socket.io/docs/v4/client-options/#auth
-
             auth: {
                 serverOffset: 0 // 自定義的參數，不是 Socket.IO 的內建功能
-            }
+            },
+            ackTimeout: 10000,
+            retries: 3,
         });
 
         const form = document.getElementById('form')
@@ -109,18 +123,13 @@
             e.preventDefault()
 
             if (input.value) {
-                socket.emit('chat:message', input.value)
+                const clientOffset = `${socket.id}-${counter++}`
+
+                socket.emit('chat:message', input.value, clientOffset, (response) => {
+                    console.log('訊息已成功送達 server： ', response);
+                })
                 input.value = ''
             }
-        })
-
-        socket.on('system:announcement', (msg) => {
-            const item = document.createElement('li')
-
-            item.textContent = msg
-            item.style.color = 'green'
-            messages.appendChild(item)
-            window.scrollTo(0, document.body.scrollHeight)
         })
 
         socket.on('chat:message', (msg, serverOffset) => {
@@ -132,6 +141,15 @@
 
             // 更新客戶端記錄的最後訊息 ID，這樣下次連線時，可以從這個 ID 開始接收訊息
             socket.auth.serverOffset = serverOffset
+        })
+
+        socket.on('system:announcement', (msg) => {
+            const item = document.createElement('li')
+
+            item.textContent = msg
+            item.style.color = 'green'
+            messages.appendChild(item)
+            window.scrollTo(0, document.body.scrollHeight)
         })
 
         socket.on('disconnect', (reason) => {
